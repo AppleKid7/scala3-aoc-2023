@@ -1,20 +1,16 @@
 package main
 
-import main.client.InputFetcher
-import scala.io.BufferedSource
-import scala.util.Try
-import sttp.client3.httpclient.zio.HttpClientZioBackend
 import zio.*
+import zio.stream.*
 import scala.annotation.tailrec
+import java.io.File
 
 object Day1 extends ZIOAppDefault {
-  private def readFileZio(file: String): ZIO[Any, Throwable, List[String]] = for {
-    source <- ZIO.attempt(scala.io.Source.fromFile(file))
-    lines = source.getLines().toList
-    _ <- ZIO.attempt(source.close())
-  } yield lines
+  private val stream: ZStream[Any, Throwable, String] =
+    ZStream.fromFileName("input.txt").via(ZPipeline.utf8Decode >>> ZPipeline.splitLines)
 
-  private def getNumbers(items: List[String]): List[Int] = items.map { string =>
+  private val part1: ZPipeline[Any, Nothing, String, Int] =
+    ZPipeline.map { string =>
     string.filter(_.isDigit).split("").toList match {
       case head :: Nil => s"$head$head".toInt
       case head :: tail => s"$head${tail.last}".toInt
@@ -22,14 +18,11 @@ object Day1 extends ZIOAppDefault {
     }
   }
 
-  private val part1 = for {
-    contents <- readFileZio("input.txt")
-    numbers <- ZIO.attempt(getNumbers(contents))
-    // _ <- ZIO.foreach(numbers)(number =>
-    //     Console.printLine(number)
-    // )
-    _ <- Console.printLine(s"part1: ${numbers.sum}")
-  } yield ()
+  val part1Sink = ZSink
+    .collectAll[Int]
+    .mapZIO(numbers => Console.printLine(s"part1: ${numbers.sum}"))
+
+  val part1Stream = stream.via(part1).run(part1Sink)
 
   enum Digits {
     case zero, one, two, three, four, five, six, seven, eight, nine
@@ -41,7 +34,7 @@ object Day1 extends ZIOAppDefault {
     else if (input.head.isDigit) Some(input.head.toString)
     else Digits.values.find(digit => input.startsWith(digit.toString)) match {
       case Some(digit) => Some(digit.ordinal.toString)
-      case None => findFirstDigit(input.drop(1))
+      case None => findFirstDigit(input.tail)
     }
   }
 
@@ -55,32 +48,21 @@ object Day1 extends ZIOAppDefault {
     }
   }
 
-  private def getAllNumbers(items: List[String]): List[Int] = {
-    items.map { string =>
-      (findFirstDigit(string), findLastDigit(string)) match {
+  private val part2: ZPipeline[Any, Nothing, String, Int] =
+    ZPipeline.map { item =>
+      (findFirstDigit(item), findLastDigit(item)) match {
         case (Some(first), Some(last)) => s"$first$last".toInt
         case (Some(first), None) => s"$first$first".toInt
         case (None, Some(last)) => s"$last$last".toInt
         case _ => 0
       }
     }
-  }
 
-  private val part2 = for {
-    contents <- readFileZio("input.txt")
-    numbers = getAllNumbers(contents)
-    _ <- Console.printLine(s"part2: ${numbers.sum}")
-  } yield ()
+  val part2Sink = ZSink
+    .collectAll[Int]
+    .mapZIO(numbers => Console.printLine(s"part2: ${numbers.sum}"))
 
-  val run = part1 *> part2
+  private val part2Stream = stream.via(part2).run(part2Sink)
 
-//  val run = (for {
-//    fetcher <- ZIO.service[InputFetcher]
-//    text <- fetcher.get("https://adventofcode.com/2023/day/1/input")
-//    contents <- readFileZio("input.txt")
-//    _ <- Console.printLine(contents)
-//  } yield ()).provide(
-//    ZLayer.make[InputFetcher](InputFetcher.live, HttpClientZioBackend.layer()),
-//    Console.live
-//  )
+  val run = part1Stream *> part2Stream
 }
