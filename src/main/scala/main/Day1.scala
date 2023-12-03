@@ -7,7 +7,7 @@ import java.io.File
 
 object Day1 extends ZIOAppDefault {
   private val stream: ZStream[Any, Throwable, String] =
-    ZStream.fromFileName("input.txt").via(ZPipeline.utf8Decode >>> ZPipeline.splitLines)
+    ZStream.fromFileName("day1Input.txt").via(ZPipeline.utf8Decode >>> ZPipeline.splitLines)
 
   private val part1: ZPipeline[Any, Nothing, String, Int] =
     ZPipeline.map { string =>
